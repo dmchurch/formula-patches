@@ -1,0 +1,299 @@
+diff -urd yubico-piv-tool-1.7.0/ykcs11/Makefile.am yubico-piv-tool-1.7.0.pinpad/ykcs11/Makefile.am
+--- yubico-piv-tool-1.7.0/ykcs11/Makefile.am	2018-10-25 09:27:06.000000000 -0400
++++ yubico-piv-tool-1.7.0.pinpad/ykcs11/Makefile.am	2019-11-20 21:55:08.107514875 -0500
+@@ -46,6 +46,7 @@
+ libykcs11_la_SOURCES += objects.c objects.h obj_types.h
+ libykcs11_la_SOURCES += pkcs11.h  pkcs11y.h
+ libykcs11_la_SOURCES += ykcs11-version.h
++libykcs11_la_SOURCES += pinpad-osx.c pinpad-osx.h
+ 
+ EXTRA_libykcs11_la_DEPENDENCIES = ykcs11.map
+ 
+@@ -53,6 +54,7 @@
+ libykcs11_la_LIBADD += ../tool/libpiv_util.la
+ 
+ libykcs11_la_LDFLAGS = -no-undefined
++libykcs11_la_LDFLAGS += -framework CoreFoundation
+ libykcs11_la_LDFLAGS += -version-info $(LT_CURRENT):$(LT_REVISION):$(LT_AGE)
+ 
+ if HAVE_LD_VERSION_SCRIPT
+diff -urd yubico-piv-tool-1.7.0/ykcs11/Makefile.in yubico-piv-tool-1.7.0.pinpad/ykcs11/Makefile.in
+--- yubico-piv-tool-1.7.0/ykcs11/Makefile.in	2019-04-03 03:53:50.000000000 -0400
++++ yubico-piv-tool-1.7.0.pinpad/ykcs11/Makefile.in	2019-11-20 21:56:19.406902388 -0500
+@@ -167,7 +167,7 @@
+ libykcs11_la_DEPENDENCIES = ../lib/libykpiv.la ../tool/libpiv_util.la
+ am_libykcs11_la_OBJECTS = ykcs11.lo vendors.lo slot_vendors.lo \
+ 	token_vendors.lo mechanisms.lo yubico_slot.lo yubico_token.lo \
+-	utils.lo openssl_utils.lo objects.lo
++	utils.lo openssl_utils.lo objects.lo pinpad-osx.lo
+ libykcs11_la_OBJECTS = $(am_libykcs11_la_OBJECTS)
+ AM_V_lt = $(am__v_lt_@AM_V@)
+ am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
+@@ -462,12 +462,12 @@
+ 	mechanisms.h yubico_slot.c yubico_slot.h yubico_token.c \
+ 	yubico_token.h utils.c utils.h openssl_utils.c openssl_utils.h \
+ 	openssl_types.h objects.c objects.h obj_types.h pkcs11.h \
+-	pkcs11y.h ykcs11-version.h
++	pkcs11y.h ykcs11-version.h pinpad-osx.c pinpad-osx.h
+ EXTRA_libykcs11_la_DEPENDENCIES = ykcs11.map
+ libykcs11_la_LIBADD = ../lib/libykpiv.la ../tool/libpiv_util.la
+-libykcs11_la_LDFLAGS = -no-undefined -version-info \
+-	$(LT_CURRENT):$(LT_REVISION):$(LT_AGE) $(am__append_1) \
+-	$(am__append_2)
++libykcs11_la_LDFLAGS = -no-undefined -framework CoreFoundation \
++	-version-info $(LT_CURRENT):$(LT_REVISION):$(LT_AGE) \
++	$(am__append_1) $(am__append_2)
+ pkgconfigdir = $(libdir)/pkgconfig
+ pkgconfig_DATA = ykcs11.pc
+ @ENABLE_COV_TRUE@AM_LDFLAGS = --coverage
+@@ -556,6 +556,7 @@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mechanisms.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/objects.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/openssl_utils.Plo@am__quote@
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/pinpad-osx.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/slot_vendors.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/token_vendors.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/utils.Plo@am__quote@
+diff -urd yubico-piv-tool-1.7.0/ykcs11/objects.c yubico-piv-tool-1.7.0.pinpad/ykcs11/objects.c
+--- yubico-piv-tool-1.7.0/ykcs11/objects.c	2019-04-03 03:44:44.000000000 -0400
++++ yubico-piv-tool-1.7.0.pinpad/ykcs11/objects.c	2019-11-20 21:55:08.111514841 -0500
+@@ -624,6 +624,13 @@
+ 
+   case CKA_LABEL:
+     DBG("LABEL");
++    if (cert_objects[piv_objects[obj].sub_id].data) {
++      char *name = get_cert_subject_name(cert_objects[piv_objects[obj].sub_id].data);
++      DBG("X509: %s", name);
++      len = strlen(name) + 1;
++      data = (CK_BYTE_PTR) name;
++      break;
++    }
+     len = strlen(piv_objects[obj].label) + 1;
+     data = (CK_BYTE_PTR) piv_objects[obj].label;
+     break;
+@@ -865,6 +872,13 @@
+ 
+   case CKA_LABEL:
+     DBG("LABEL");
++    if (cert_objects[piv_objects[obj].sub_id].data) {
++      char *name = get_cert_subject_name(cert_objects[piv_objects[obj].sub_id].data);
++      DBG("X509: %s", name);
++      len = strlen(name) + 1;
++      data = (CK_BYTE_PTR) name;
++      break;
++    }
+     len = strlen(piv_objects[obj].label) + 1;
+     data = (CK_BYTE_PTR) piv_objects[obj].label;
+     break;
+diff -urd yubico-piv-tool-1.7.0/ykcs11/openssl_utils.c yubico-piv-tool-1.7.0.pinpad/ykcs11/openssl_utils.c
+--- yubico-piv-tool-1.7.0/ykcs11/openssl_utils.c	2018-05-08 03:52:30.000000000 -0400
++++ yubico-piv-tool-1.7.0.pinpad/ykcs11/openssl_utils.c	2019-11-20 21:55:08.111514841 -0500
+@@ -67,6 +67,15 @@
+ 
+ }
+ 
++char *get_cert_subject_name(const X509 *cert) {
++  static char namebuf[300] = {};
++  X509_NAME *name = X509_get_subject_name(cert);
++  if (X509_NAME_get_text_by_NID(name, NID_commonName, namebuf, sizeof(namebuf)) > 0) {
++    return namebuf;
++  }
++  return NULL;
++}
++
+ CK_RV do_create_empty_cert(CK_BYTE_PTR in, CK_ULONG in_len, CK_BBOOL is_rsa,
+                            CK_BYTE_PTR out, CK_ULONG_PTR out_len) {
+ 
+diff -urd yubico-piv-tool-1.7.0/ykcs11/openssl_utils.h yubico-piv-tool-1.7.0.pinpad/ykcs11/openssl_utils.h
+--- yubico-piv-tool-1.7.0/ykcs11/openssl_utils.h	2017-04-06 10:05:57.000000000 -0400
++++ yubico-piv-tool-1.7.0.pinpad/ykcs11/openssl_utils.h	2019-11-20 21:55:08.111514841 -0500
+@@ -46,6 +46,7 @@
+ CK_RV do_get_raw_cert(X509 *cert, CK_BYTE_PTR out, CK_ULONG_PTR out_len);
+ CK_RV do_delete_cert(X509 **cert);
+ //CK_RV free_cert(X509 *cert);
++char *get_cert_subject_name(const X509 *cert);
+ 
+ CK_RV       do_store_pubk(X509 *cert, EVP_PKEY **key);
+ CK_KEY_TYPE do_get_key_type(EVP_PKEY *key);
+Only in yubico-piv-tool-1.7.0.pinpad/ykcs11: pinpad-osx.c
+Only in yubico-piv-tool-1.7.0.pinpad/ykcs11: pinpad-osx.h
+diff -urd yubico-piv-tool-1.7.0/ykcs11/ykcs11.c yubico-piv-tool-1.7.0.pinpad/ykcs11/ykcs11.c
+--- yubico-piv-tool-1.7.0/ykcs11/ykcs11.c	2019-04-03 03:44:44.000000000 -0400
++++ yubico-piv-tool-1.7.0.pinpad/ykcs11/ykcs11.c	2019-11-20 21:55:08.111514841 -0500
+@@ -40,6 +40,7 @@
+ #include "openssl_types.h"
+ #include "openssl_utils.h"
+ #include "debug.h"
++#include "pinpad-osx.h"
+ 
+ #include <stdbool.h>
+ #include "../tool/util.h"
+@@ -767,6 +768,15 @@
+   return CKR_FUNCTION_FAILED;
+ }
+ 
++static inline void clear_string(char **str) {
++  if (*str) {
++    memset(*str, 0, strlen(*str));
++  }
++}
++
++#define securebuf lenbuf __attribute__((cleanup(clear_data))) *
++
++
+ CK_DEFINE_FUNCTION(CK_RV, C_Login)(
+   CK_SESSION_HANDLE hSession,
+   CK_USER_TYPE userType,
+@@ -777,6 +787,8 @@
+   DIN;
+   CK_RV          rv;
+   token_vendor_t token;
++  int using_pinpad = 0;
++  char __attribute__((cleanup(clear_string))) *gotpin = NULL;
+ 
+   if (piv_state == NULL) {
+     DBG("libykpiv is not initialized or already finalized");
+@@ -789,6 +801,18 @@
+     return CKR_USER_TYPE_INVALID;
+ 
+   DBG("user %lu, pin %s, pinlen %lu", userType, pPin, ulPinLen);
++  if (pPin && !strcmp((char *)pPin, "pinpad")) {
++    if (userType == CKU_CONTEXT_SPECIFIC) {
++      gotpin = osx_pinpad_get_pin();
++      if (gotpin) {
++        pPin = (CK_UTF8CHAR_PTR) gotpin;
++        ulPinLen = strlen(gotpin);
++        DBG("from pinpad: pin %s, pinlen %lu", pPin, ulPinLen);
++      }
++    } else {
++      using_pinpad = userType;
++    }
++  }
+ 
+   if (session.handle != YKCS11_SESSION_ID) {
+     DBG("Session is not open");
+@@ -822,11 +846,14 @@
+       return CKR_USER_ANOTHER_ALREADY_LOGGED_IN;
+     }
+ 
+-    rv = token.token_login(piv_state, CKU_USER, pPin, ulPinLen);
+-    if (rv != CKR_OK) {
+-      DBG("Unable to login as regular user");
+-      return rv;
++    if (!using_pinpad) {
++      rv = token.token_login(piv_state, CKU_USER, pPin, ulPinLen);
++      if (rv != CKR_OK) {
++        DBG("Unable to login as regular user");
++        return rv;
++      }
+     }
++    session.using_pinpad = using_pinpad;
+ 
+     if ((session.info.flags & CKF_RW_SESSION) == 0)
+       session.info.state = CKS_RO_USER_FUNCTIONS;
+@@ -845,11 +872,14 @@
+         session.info.state == CKS_RW_USER_FUNCTIONS)
+       return CKR_USER_ANOTHER_ALREADY_LOGGED_IN;
+ 
+-    rv = token.token_login(piv_state, CKU_SO, pPin, ulPinLen);
+-    if (rv != CKR_OK) {
+-      DBG("Unable to login as SO");
+-      return rv;
++    if (!using_pinpad) {
++      rv = token.token_login(piv_state, CKU_SO, pPin, ulPinLen);
++      if (rv != CKR_OK) {
++        DBG("Unable to login as SO");
++        return rv;
++      }
+     }
++    session.using_pinpad = using_pinpad;
+ 
+     session.info.state = CKS_RW_SO_FUNCTIONS;
+     break;
+@@ -896,6 +926,7 @@
+     return CKR_SESSION_HANDLE_INVALID;
+   }
+ 
++  session.using_pinpad = 0;
+   if (session.info.state == CKS_RO_PUBLIC_SESSION ||
+       session.info.state == CKS_RW_PUBLIC_SESSION)
+     return CKR_USER_NOT_LOGGED_IN;
+@@ -1696,12 +1727,15 @@
+   CK_ULONG     key_len = 0;
+   CK_BYTE      exp[3];
+   CK_BYTE      buf[1024] = {0};
++  static CK_BYTE label[300] = {0};
++  CK_RV        rv;
+   CK_ATTRIBUTE template[] = {
+     {CKA_KEY_TYPE, &type, sizeof(type)},
+     {CKA_MODULUS_BITS, &key_len, sizeof(key_len)},
+     {CKA_MODULUS, NULL, 0},
+     {CKA_PUBLIC_EXPONENT, exp, sizeof(exp)},
+     {CKA_EC_POINT, buf, sizeof(buf)},
++    {CKA_LABEL, label, sizeof(label)},
+   };
+ 
+   DIN;
+@@ -1731,6 +1765,22 @@
+ 
+   DBG("Trying to sign some data with mechanism %lu and key %lu", pMechanism->mechanism, hKey);
+ 
++  if (session.using_pinpad) {
++    DBG("PIN auth delayed until use, asking user...");
++    token_vendor_t token = get_token_vendor(session.slot->token->vid);
++    char __attribute__((cleanup(clear_string))) *gotpin = NULL;
++
++    gotpin = osx_pinpad_get_pin();
++    if (gotpin) {
++      rv = token.token_login(piv_state, session.using_pinpad, (CK_UTF8CHAR_PTR)gotpin, strlen(gotpin));
++
++      if (rv == CKR_OK) {
++        session.using_pinpad = 0;
++      }
++    }
++
++  }
++
+   // Check if mechanism is supported
+   if (check_sign_mechanism(&session, pMechanism) != CKR_OK) {
+     DBG("Mechanism %lu is not supported either by the token or the module", pMechanism->mechanism);
+@@ -1810,6 +1860,11 @@
+     DBG("Incorrect key %lu", hKey);
+     return CKR_KEY_HANDLE_INVALID;
+   }
++  op_info.op.sign.key_label = NULL;
++  if (get_attribute(&session, hKey, template + 5) == CKR_OK) {
++    DBG("Key label is %s", label);
++    op_info.op.sign.key_label = (char *)label;
++  }
+ 
+   DBG("Algorithm is %d", op_info.op.sign.algo);
+   // Make sure that both mechanism and key have the same algorithm
+@@ -1936,7 +1991,7 @@
+ 
+   *pulSignatureLen = sizeof(op_info.buf);
+ 
+-  piv_rv = ykpiv_sign_data(piv_state, op_info.buf, op_info.buf_len, op_info.buf, pulSignatureLen, op_info.op.sign.algo, op_info.op.sign.key_id);
++  piv_rv = osx_pinpad_sign_data(piv_state, op_info.buf, op_info.buf_len, op_info.buf, pulSignatureLen, op_info.op.sign.algo, op_info.op.sign.key_id, op_info.op.sign.key_label);
+   if (piv_rv != YKPIV_OK) {
+     if (piv_rv == YKPIV_AUTHENTICATION_ERROR) {
+       DBG("Operation requires authentication or touch");
+diff -urd yubico-piv-tool-1.7.0/ykcs11/ykcs11.h yubico-piv-tool-1.7.0.pinpad/ykcs11/ykcs11.h
+--- yubico-piv-tool-1.7.0/ykcs11/ykcs11.h	2017-04-06 10:05:57.000000000 -0400
++++ yubico-piv-tool-1.7.0.pinpad/ykcs11/ykcs11.h	2019-11-20 21:55:08.111514841 -0500
+@@ -55,6 +55,7 @@
+ typedef struct {
+   CK_SESSION_HANDLE handle;
+   CK_SESSION_INFO   info; /* slotid, state, flags, deviceerror */
++  int               using_pinpad;
+   ykcs11_slot_t     *slot;
+ } ykcs11_session_t;
+ 
+@@ -79,6 +80,7 @@
+   CK_BYTE           algo;    // Algo for ykpiv // TODO: infer this from the key length?
+   CK_ULONG          key_id;  // Key id for ykpiv // TODO: make this a BYTE and store the id {0, 1, 2, 3}
+   CK_ULONG          key_len; // Length in bits
++  char              *key_label;
+ } sign_info_t;
+ 
+ typedef struct {
